@@ -1,0 +1,31 @@
+.DS_Store
+
+# env
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# node
+node_modules/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# builds
+build/
+dist/
+coverage/
+.vite/
+.turbo/
+.next/
+.out/
+.cache/
+
+# aptos/move
+.aptos/
+local/
+
+# rust
+target/

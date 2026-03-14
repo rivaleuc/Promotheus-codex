@@ -1,0 +1,152 @@
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 24 8% 5%;
+    --foreground: 30 15% 92%;
+
+    --card: 24 8% 8%;
+    --card-foreground: 30 15% 92%;
+
+    --popover: 24 8% 8%;
+    --popover-foreground: 30 15% 92%;
+
+    --primary: 38 92% 50%;
+    --primary-foreground: 24 8% 5%;
+
+    --secondary: 24 8% 12%;
+    --secondary-foreground: 30 15% 70%;
+
+    --muted: 24 6% 10%;
+    --muted-foreground: 30 8% 45%;
+
+    --accent: 38 92% 50%;
+    --accent-foreground: 24 8% 5%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 30 15% 92%;
+
+    --border: 24 8% 16%;
+    --input: 24 8% 14%;
+    --ring: 38 92% 50%;
+
+    --radius: 0.25rem;
+
+    --amber: #f59e0b;
+    --amber-dim: #92400e;
+    --amber-glow: rgba(245, 158, 11, 0.15);
+    --surface: #111009;
+    --surface-2: #1a1814;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Oswald', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.font-mono {
+  font-family: 'IBM Plex Mono', monospace !important;
+}
+
+/* Amber glow on focused inputs */
+input:focus, textarea:focus {
+  outline: none;
+  border-color: var(--amber) !important;
+  box-shadow: 0 0 0 1px var(--amber), 0 0 12px var(--amber-glow);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: hsl(var(--background)); }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--amber); }
+
+/* Grain overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 128px;
+}
+
+/* Status badges */
+.badge-active     { color: #4ade80; background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.2); }
+.badge-challenged { color: #fbbf24; background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.2); }
+.badge-removed    { color: #f87171; background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.2); }
+.badge-vindicated { color: #60a5fa; background: rgba(96,165,250,0.08); border: 1px solid rgba(96,165,250,0.2); }
+
+/* Amber button */
+.btn-amber {
+  background: var(--amber);
+  color: #0a0908;
+  font-family: 'Oswald', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-amber:hover {
+  background: #fbbf24;
+  box-shadow: 0 0 20px rgba(245,158,11,0.4);
+}
+.btn-amber:disabled {
+  background: #2a2520;
+  color: #5a5248;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Ghost button */
+.btn-ghost {
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  border: 1px solid hsl(var(--border));
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-ghost:hover {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+/* Card */
+.p-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+}
+.p-card:hover {
+  border-color: rgba(245,158,11,0.3);
+}
+
+/* Amber line separator */
+.amber-line {
+  height: 1px;
+  background: linear-gradient(90deg, var(--amber), transparent);
+}

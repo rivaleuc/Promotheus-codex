@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: prometheus-backend
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm run start
+    envVars:
+      - key: PORT
+        value: 3001

@@ -1,8 +1,8 @@
 const BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
 const DEMO = import.meta.env.VITE_DEMO === "1";
-export const NETWORK_NAME = import.meta.env.VITE_NETWORK_NAME || "shelbynet";
-export const EXPLORER_NETWORK = import.meta.env.VITE_EXPLORER_NETWORK || NETWORK_NAME;
-export const APTOS_NODE_URL = import.meta.env.VITE_APTOS_NODE_URL || "https://api.shelbynet.shelby.xyz/v1";
+export const NETWORK_NAME = (import.meta.env.VITE_NETWORK_NAME || "testnet").toLowerCase();
+export const EXPLORER_NETWORK = (import.meta.env.VITE_EXPLORER_NETWORK || NETWORK_NAME).toLowerCase();
+export const APTOS_NODE_URL = import.meta.env.VITE_APTOS_NODE_URL || "https://api.testnet.aptoslabs.com/v1";
 export const PROMETHEUS_CONTRACT = import.meta.env.VITE_PROMETHEUS_CONTRACT || "";
 export const SHELBY_EXPIRATION_DAYS = Number(import.meta.env.VITE_SHELBY_EXPIRATION_DAYS || "30");
 
@@ -139,7 +139,7 @@ const demoStats: Stats = {
   totalStaked: 465000000,
   totalStakedAPT: "4.6500 APT",
   contract: "0xDEMO",
-  network: "shelbynet",
+  network: "testnet",
 };
 
 export async function fetchDocs(): Promise<Doc[]> {

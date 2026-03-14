@@ -105,7 +105,7 @@ export default function Home() {
           {[
             { icon: <Flame size={20} style={{ color: "var(--amber)" }} />, step: "01", title: "PUBLISH", body: "Upload your document to Shelby Protocol. Stake APT to vouch for its authenticity." },
             { icon: <Shield size={20} style={{ color: "var(--amber)" }} />, step: "02", title: "GUARDIAN", body: "Others stake APT on your document. They earn a share of read fees. More stakes = more trust." },
-            { icon: <Eye size={20} style={{ color: "var(--amber)" }} />, step: "03", title: "READ FREE", body: "Anyone reads for free. Server sponsors the Shelby micropayment. No wallet needed to read." },
+            { icon: <Eye size={20} style={{ color: "var(--amber)" }} />, step: "03", title: "READ (PAID)", body: "Reads require a wallet micropayment. No server custody or background wallet." },
             { icon: <AlertTriangle size={20} style={{ color: "#f87171" }} />, step: "04", title: "CHALLENGE", body: "Anyone can challenge a document. Community votes with stake. Loser gets slashed." },
           ].map(({ icon, step, title, body }) => (
             <div key={step} className="p-card" style={{ padding: 24, transition: "border-color 0.2s" }}>

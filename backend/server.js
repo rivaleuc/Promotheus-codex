@@ -44,13 +44,11 @@ function formatAPT(octas) {
 // [GET] /health
 app.get("/health", async (req, res) => {
   try {
-    let account = null;
-    try { account = contract.getServerAccount(); } catch {}
     const networkName = process.env.NETWORK_NAME || "shelbynet";
     res.json({
       ok: true,
       contract: process.env.PROMETHEUS_CONTRACT,
-      serverWallet: account ? account.accountAddress.toString() : null,
+      serverWallet: null,
       network: networkName,
       docs: docRegistry.size,
     });
@@ -96,85 +94,13 @@ app.post("/api/registry", async (req, res) => {
 // ─────────────────────────────────────────────────────────
 // [POST] /api/upload
 //
-// Flow:
-//   1. Receive file
-//   2. Compute sha256
-//   3. Upload to Shelby
-//   4. Publish on Aptos contract (stake APT)
-//   5. Store metadata locally
-//   6. Return doc info
+// Server-signed upload is disabled (no backend wallet).
+// Use the client wallet flow (/api/shelby/upload + on-chain tx from frontend).
 // ─────────────────────────────────────────────────────────
-app.post("/api/upload", upload.single("file"), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: "No file provided" });
-
-    const {
-      title       = req.file.originalname,
-      description = "",
-      stakeAmount = 10_000_000, // 0.1 APT default
-    } = req.body;
-
-    const shelbyAccount = process.env.SHELBY_ACCOUNT;
-    if (!shelbyAccount) return res.status(500).json({ error: "SHELBY_ACCOUNT not set" });
-
-    const timestamp  = Date.now();
-    const safeName   = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const blobName   = `prometheus/${timestamp}_${safeName}`;
-    const hash       = contract.sha256(req.file.buffer);
-
-    console.log(C.cyan(`⬆  Uploading: ${blobName} (${req.file.size} bytes)`));
-
-    // 1. Upload to Shelby
-    await shelby.uploadBlob(shelbyAccount, blobName, req.file.buffer);
-    console.log(C.green(`   Shelby upload ✔`));
-
-    // 2. Publish on-chain
-    const txHash = await contract.publishDocument({
-      shelbyAccount,
-      shelbyBlobName: blobName,
-      title,
-      description,
-      sha256Hash: hash,
-      stakeAmount: parseInt(stakeAmount),
-    });
-    console.log(C.green(`   Contract publish ✔ tx: ${txHash}`));
-
-    // 3. Get docId (= next_id - 1 after publish)
-    const docId = await contract.getTotalDocs();
-
-    // 4. Store metadata
-    const meta = {
-      docId,
-      title,
-      description,
-      filename:    req.file.originalname,
-      mimeType:    req.file.mimetype,
-      size:        req.file.size,
-      sha256:      hash,
-      shelbyAccount,
-      shelbyBlobName: blobName,
-      stakeAmount: parseInt(stakeAmount),
-      txHash,
-      uploadedAt:  new Date().toISOString(),
-    };
-    docRegistry.set(docId, meta);
-
-    console.log(C.green(`   Doc #${docId} registered\n`));
-
-    res.json({
-      ok: true,
-      docId,
-      txHash,
-      sha256: hash,
-      shelbyBlobName: blobName,
-      stakeAmount: formatAPT(stakeAmount),
-      explorerUrl: `https://explorer.aptoslabs.com/txn/${txHash}?network=${process.env.EXPLORER_NETWORK || process.env.NETWORK_NAME || "shelbynet"}`,
-    });
-
-  } catch (err) {
-    console.error(C.red("Upload error:"), err.message);
-    res.status(500).json({ error: err.message });
-  }
+app.post("/api/upload", async (_req, res) => {
+  res.status(501).json({
+    error: "Server-signed upload is disabled. Use client wallet upload flow.",
+  });
 });
 
 // ─────────────────────────────────────────────────────────
@@ -248,55 +174,21 @@ app.get("/api/docs/:docId", async (req, res) => {
 // ─────────────────────────────────────────────────────────
 // [GET] /api/read/:docId
 //
-// Server-sponsored read:
-//   1. Check doc is active/vindicated
-//   2. Create Shelby session (server pays)
-//   3. Record read on-chain
-//   4. Stream file to client
-//
-// Client pays: NOTHING
+// Server-sponsored reads are disabled (no backend wallet).
+// Paid reads must be done client-side with the user's wallet.
 // ─────────────────────────────────────────────────────────
 app.get("/api/read/:docId", async (req, res) => {
-  const docId  = parseInt(req.params.docId);
-  const meta   = docRegistry.get(docId);
+  const docId = parseInt(req.params.docId);
+  const meta = docRegistry.get(docId);
 
   if (!meta) return res.status(404).json({ error: "Document not found" });
 
-  try {
-    // Check status
-    const status = await contract.getDocStatus(docId);
-    if (status === contract.DOC_STATUS.REMOVED) {
-      return res.status(410).json({ error: "Document was removed after challenge" });
-    }
-
-    const userIdentity = req.headers["x-wallet"] || req.ip || "anonymous";
-
-    // Server creates session + pays Shelby
-    const sessionId = await shelby.createSession(userIdentity);
-
-    // Record read on Aptos (async — don't block the stream)
-    if (process.env.SERVER_PRIVATE_KEY) {
-      contract.recordRead(docId).catch((e) =>
-        console.warn(C.dim(`  record_read warning: ${e.message}`))
-      );
-    }
-
-    console.log(C.cyan(`⬇  Reading doc #${docId} — user: ${userIdentity}`));
-
-    res.setHeader("Content-Disposition", `attachment; filename="${meta.filename}"`);
-    res.setHeader("X-Doc-Id",     docId.toString());
-    res.setHeader("X-Sha256",     meta.sha256);
-    res.setHeader("X-Tx-Hash",    meta.txHash);
-    res.setHeader("X-Session-Id", sessionId);
-
-    await shelby.streamBlob(meta.shelbyAccount, meta.shelbyBlobName, res);
-
-  } catch (err) {
-    console.error(C.red("Read error:"), err.message);
-    if (!res.headersSent) {
-      res.status(500).json({ error: err.message });
-    }
-  }
+  res.status(402).json({
+    error: "Paid reads require client wallet signature. Server wallet is disabled.",
+    docId,
+    shelbyAccount: meta.shelbyAccount,
+    shelbyBlobName: meta.shelbyBlobName,
+  });
 });
 
 // ─────────────────────────────────────────────────────────

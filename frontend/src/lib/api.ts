@@ -5,6 +5,7 @@ export const EXPLORER_NETWORK = (import.meta.env.VITE_EXPLORER_NETWORK || NETWOR
 export const APTOS_NODE_URL = import.meta.env.VITE_APTOS_NODE_URL || "https://api.testnet.aptoslabs.com/v1";
 export const PROMETHEUS_CONTRACT = import.meta.env.VITE_PROMETHEUS_CONTRACT || "";
 export const SHELBY_EXPIRATION_DAYS = Number(import.meta.env.VITE_SHELBY_EXPIRATION_DAYS || "30");
+export const READS_DISABLED = (import.meta.env.VITE_DISABLE_READS || "1") === "1";
 
 export interface Doc {
   docId: number;

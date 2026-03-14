@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { fetchDoc, downloadUrl, formatBytes, shortHash, STATUS, EXPLORER_NETWORK, APTOS_NODE_URL, type Doc } from "../lib/api";
+import { fetchDoc, downloadUrl, formatBytes, shortHash, STATUS, EXPLORER_NETWORK, APTOS_NODE_URL, READS_DISABLED, type Doc } from "../lib/api";
 import { Shield, Eye, Download, AlertTriangle, ExternalLink, ChevronLeft, Check, X } from "lucide-react";
 
 const GUARDIAN_PRESETS = [5_000_000, 20_000_000, 50_000_000, 100_000_000];
@@ -68,11 +68,22 @@ export default function DocumentPage() {
               {doc.description && <p style={{ color: "hsl(var(--muted-foreground))", fontSize: "0.9rem", margin: 0 }}>{doc.description}</p>}
             </div>
             {doc.status !== 2 && (
-              <a href={downloadUrl(docId)} download={doc.filename} style={{ textDecoration: "none", flexShrink: 0 }}>
-                <button className="btn-amber" style={{ padding: "12px 20px", fontSize: "0.8rem", display: "flex", alignItems: "center", gap: 8 }}>
-                  <Download size={14} /> READ FREE
+              READS_DISABLED ? (
+                <button
+                  className="btn-amber"
+                  disabled
+                  title="Paid reads require client wallet signature (server wallet disabled)."
+                  style={{ padding: "12px 20px", fontSize: "0.8rem", display: "flex", alignItems: "center", gap: 8, opacity: 0.6, cursor: "not-allowed" }}
+                >
+                  <Download size={14} /> READ (PAID)
                 </button>
-              </a>
+              ) : (
+                <a href={downloadUrl(docId)} download={doc.filename} style={{ textDecoration: "none", flexShrink: 0 }}>
+                  <button className="btn-amber" style={{ padding: "12px 20px", fontSize: "0.8rem", display: "flex", alignItems: "center", gap: 8 }}>
+                    <Download size={14} /> READ FREE
+                  </button>
+                </a>
+              )
             )}
           </div>
 

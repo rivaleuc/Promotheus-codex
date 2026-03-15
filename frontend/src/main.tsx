@@ -19,7 +19,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <AptosWalletAdapterProvider
-        autoConnect={false}
+        autoConnect={true}
         optInWallets={["Petra", "Petra Web"]}
         dappConfig={{ network: dappNetwork }}
         onError={(e) => console.error("[wallet]", e)}

@@ -128,7 +128,6 @@ app.post("/api/registry", async (req, res) => {
 });
 
 // [PATCH] /api/registry/:docId
-// Update doc meta (e.g. after challenge opened: save challengeId + deadline)
 app.patch("/api/registry/:docId", async (req, res) => {
   try {
     const docId = parseInt(req.params.docId);
@@ -197,12 +196,10 @@ app.get("/api/docs/:docId", async (req, res) => {
       getReadCount(docId),
     ]);
 
-    // If challenged and we have a challengeId, fetch deadline from chain
     let challengeDeadline = meta.challengeDeadline || null;
     if (status === 1 && meta.challengeId && !challengeDeadline) {
       try {
         challengeDeadline = await contract.getChallengeDeadline(meta.challengeId);
-        // Cache it in Redis
         await registrySet(docId, { ...meta, challengeDeadline });
       } catch (_) { }
     }
@@ -224,6 +221,7 @@ app.get("/api/docs/:docId", async (req, res) => {
 });
 
 // [GET] /api/read/:docId
+// Free read — streams blob from Shelby inline
 app.get("/api/read/:docId", async (req, res) => {
   try {
     const docId = parseInt(req.params.docId);
@@ -234,6 +232,7 @@ app.get("/api/read/:docId", async (req, res) => {
     await incrementReadCount(docId);
 
     if (meta.mimeType) res.setHeader("Content-Type", meta.mimeType);
+    if (meta.size) res.setHeader("Content-Length", meta.size);
     res.setHeader("Content-Disposition", `inline; filename="${meta.filename || "document"}"`);
     res.setHeader("Accept-Ranges", "bytes");
     res.setHeader("Access-Control-Allow-Origin", "*");

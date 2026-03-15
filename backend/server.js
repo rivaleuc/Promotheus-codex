@@ -3,6 +3,7 @@
 //   Shelby Protocol + Aptos Move contract
 //   Registry: Upstash Redis (persistent across restarts)
 //   Reads: free, server streams blob from Shelby directly
+//   Read count: tracked in Redis (no on-chain call needed)
 // ============================================================
 require("dotenv").config();
 
@@ -32,6 +33,7 @@ const redis = new Redis({
 
 // ─── Registry helpers ──────────────────────────────────────
 const REGISTRY_KEY = "prometheus:registry";
+const READS_KEY = "prometheus:reads";
 
 async function registryGet(docId) {
   const raw = await redis.hget(REGISTRY_KEY, String(docId));
@@ -54,6 +56,15 @@ async function registryEntries() {
 
 async function registrySize() {
   return await redis.hlen(REGISTRY_KEY);
+}
+
+async function getReadCount(docId) {
+  const count = await redis.hget(READS_KEY, String(docId));
+  return Number(count) || 0;
+}
+
+async function incrementReadCount(docId) {
+  await redis.hincrby(READS_KEY, String(docId), 1);
 }
 
 // ─── Helpers ──────────────────────────────────────────────
@@ -134,7 +145,7 @@ app.get("/api/docs", async (req, res) => {
         contract.getDocStatus(docId),
         contract.getGuardianCount(docId),
         contract.getTotalStaked(docId),
-        contract.getReadCount(docId),
+        getReadCount(docId),
       ]);
 
       docs.push({
@@ -168,7 +179,7 @@ app.get("/api/docs/:docId", async (req, res) => {
       contract.getDocStatus(docId),
       contract.getGuardianCount(docId),
       contract.getTotalStaked(docId),
-      contract.getReadCount(docId),
+      getReadCount(docId),
     ]);
 
     res.json({
@@ -194,6 +205,9 @@ app.get("/api/read/:docId", async (req, res) => {
     const meta = await registryGet(docId);
 
     if (!meta) return res.status(404).json({ error: "Document not found" });
+
+    // Increment read count f Redis
+    await incrementReadCount(docId);
 
     if (meta.mimeType) {
       res.setHeader("Content-Type", meta.mimeType);
@@ -237,7 +251,7 @@ app.get("/api/stats", async (req, res) => {
     await Promise.all(
       entries.map(async ([docId]) => {
         const [reads, staked] = await Promise.all([
-          contract.getReadCount(docId),
+          getReadCount(docId),
           contract.getTotalStaked(docId),
         ]);
         totalReads += reads;

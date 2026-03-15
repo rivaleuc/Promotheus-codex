@@ -17,23 +17,23 @@ import { Upload, FileText, ExternalLink, CheckCircle, Flame } from "lucide-react
 const PRESETS = [
   { label: "0.1 APT", value: 10_000_000, desc: "Minimum — low conviction" },
   { label: "0.5 APT", value: 50_000_000, desc: "Standard — moderate signal" },
-  { label: "1 APT",   value: 100_000_000, desc: "High conviction" },
-  { label: "5 APT",   value: 500_000_000, desc: "Maximum trust signal" },
+  { label: "1 APT", value: 100_000_000, desc: "High conviction" },
+  { label: "5 APT", value: 500_000_000, desc: "Maximum trust signal" },
 ];
 
 export default function UploadPage() {
   const navigate = useNavigate();
   const { connected, account, signAndSubmitTransaction } = useWallet();
   const aptos = useMemo(() => new Aptos(new AptosConfig({ network: Network.CUSTOM, fullnode: APTOS_NODE_URL })), [APTOS_NODE_URL]);
-  const [file, setFile]           = useState<File | null>(null);
-  const [dragging, setDragging]   = useState(false);
-  const [title, setTitle]         = useState("");
-  const [desc, setDesc]           = useState("");
-  const [stake, setStake]         = useState(10_000_000);
-  const [progress, setProgress]   = useState(0);
-  const [status, setStatus]       = useState<"idle"|"uploading"|"done"|"error">("idle");
-  const [result, setResult]       = useState<{ docId: number; txHash: string; explorerUrl: string } | null>(null);
-  const [error, setError]         = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [title, setTitle] = useState("");
+  const [desc, setDesc] = useState("");
+  const [stake, setStake] = useState(10_000_000);
+  const [progress, setProgress] = useState(0);
+  const [status, setStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
+  const [result, setResult] = useState<{ docId: number; txHash: string; explorerUrl: string } | null>(null);
+  const [error, setError] = useState("");
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragging(false);
@@ -134,7 +134,7 @@ export default function UploadPage() {
         mimeType: file.type || "application/octet-stream",
         size: file.size,
         sha256,
-        shelbyAccount: account.address,
+        shelbyAccount: account.address.toString(),
         shelbyBlobName: blobName,
         stakeAmount: stake,
         txHash: publishTx.hash,

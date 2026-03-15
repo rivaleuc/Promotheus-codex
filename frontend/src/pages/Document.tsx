@@ -1,20 +1,20 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { fetchDoc, downloadUrl, formatBytes, shortHash, STATUS, EXPLORER_NETWORK, APTOS_NODE_URL, READS_DISABLED, type Doc } from "../lib/api";
-import { Shield, Eye, Download, AlertTriangle, ExternalLink, ChevronLeft, Check, X } from "lucide-react";
+import { fetchDoc, downloadUrl, formatBytes, shortHash, STATUS, EXPLORER_NETWORK, APTOS_NODE_URL, type Doc } from "../lib/api";
+import { Shield, Eye, AlertTriangle, ExternalLink, ChevronLeft, Check, X } from "lucide-react";
 
 const GUARDIAN_PRESETS = [5_000_000, 20_000_000, 50_000_000, 100_000_000];
-const CHALLENGE_STAKE  = 20_000_000; // 0.2 APT min
-const VOTE_STAKE       = 1_000_000;  // 0.01 APT min
+const CHALLENGE_STAKE = 20_000_000; // 0.2 APT min
+const VOTE_STAKE = 1_000_000;  // 0.01 APT min
 
 export default function DocumentPage() {
   const { id } = useParams<{ id: string }>();
   const docId = Number(id);
 
-  const [doc, setDoc]     = useState<Doc | null>(null);
+  const [doc, setDoc] = useState<Doc | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab]     = useState<"guardian"|"challenge">("guardian");
+  const [tab, setTab] = useState<"guardian" | "challenge">("guardian");
 
   // Guardian form
   const [gStake, setGStake] = useState(GUARDIAN_PRESETS[0]);
@@ -68,22 +68,13 @@ export default function DocumentPage() {
               {doc.description && <p style={{ color: "hsl(var(--muted-foreground))", fontSize: "0.9rem", margin: 0 }}>{doc.description}</p>}
             </div>
             {doc.status !== 2 && (
-              READS_DISABLED ? (
-                <button
-                  className="btn-amber"
-                  disabled
-                  title="Paid reads require client wallet signature (server wallet disabled)."
-                  style={{ padding: "12px 20px", fontSize: "0.8rem", display: "flex", alignItems: "center", gap: 8, opacity: 0.6, cursor: "not-allowed" }}
-                >
-                  <Download size={14} /> READ (PAID)
-                </button>
-              ) : (
-                <a href={downloadUrl(docId)} download={doc.filename} style={{ textDecoration: "none", flexShrink: 0 }}>
-                  <button className="btn-amber" style={{ padding: "12px 20px", fontSize: "0.8rem", display: "flex", alignItems: "center", gap: 8 }}>
-                    <Download size={14} /> READ FREE
-                  </button>
-                </a>
-              )
+              <button
+                className="btn-amber"
+                onClick={() => window.open(downloadUrl(docId), "_blank")}
+                style={{ padding: "12px 20px", fontSize: "0.8rem", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}
+              >
+                <Eye size={14} /> READ FREE
+              </button>
             )}
           </div>
 
@@ -126,7 +117,7 @@ export default function DocumentPage() {
               <button key={t} onClick={() => setTab(t)}
                 style={{ padding: "10px 20px", fontFamily: "'Oswald',sans-serif", fontWeight: 600, fontSize: "0.85rem", letterSpacing: "0.1em", textTransform: "uppercase", cursor: "pointer", background: "transparent", border: "none", borderBottom: tab === t ? "2px solid var(--amber)" : "2px solid transparent", color: tab === t ? "var(--amber)" : "hsl(var(--muted-foreground))", marginBottom: -1, transition: "all 0.15s" }}>
                 {t === "guardian" ? <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Shield size={13} /> BECOME GUARDIAN</span>
-                                 : <span style={{ display: "flex", alignItems: "center", gap: 6 }}><AlertTriangle size={13} /> CHALLENGE</span>}
+                  : <span style={{ display: "flex", alignItems: "center", gap: 6 }}><AlertTriangle size={13} /> CHALLENGE</span>}
               </button>
             ))}
           </div>

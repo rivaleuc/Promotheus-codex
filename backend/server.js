@@ -3,7 +3,7 @@
 //   Shelby Protocol + Aptos Move contract
 //   Registry: Upstash Redis (persistent across restarts)
 //   Reads: free, server streams blob from Shelby directly
-//   Read count: tracked in Redis (no on-chain call needed)
+//   Read count: tracked in Redis
 // ============================================================
 require("dotenv").config();
 
@@ -22,7 +22,7 @@ app.use(express.json());
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
+  limits: { fileSize: 500 * 1024 * 1024 },
 });
 
 // ─── Upstash Redis client ──────────────────────────────────
@@ -127,6 +127,21 @@ app.post("/api/registry", async (req, res) => {
   }
 });
 
+// [PATCH] /api/registry/:docId
+// Update doc meta (e.g. after challenge opened: save challengeId + deadline)
+app.patch("/api/registry/:docId", async (req, res) => {
+  try {
+    const docId = parseInt(req.params.docId);
+    const meta = await registryGet(docId);
+    if (!meta) return res.status(404).json({ error: "Document not found" });
+    const updated = { ...meta, ...req.body };
+    await registrySet(docId, updated);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // [POST] /api/upload — disabled
 app.post("/api/upload", async (_req, res) => {
   res.status(501).json({
@@ -182,6 +197,16 @@ app.get("/api/docs/:docId", async (req, res) => {
       getReadCount(docId),
     ]);
 
+    // If challenged and we have a challengeId, fetch deadline from chain
+    let challengeDeadline = meta.challengeDeadline || null;
+    if (status === 1 && meta.challengeId && !challengeDeadline) {
+      try {
+        challengeDeadline = await contract.getChallengeDeadline(meta.challengeId);
+        // Cache it in Redis
+        await registrySet(docId, { ...meta, challengeDeadline });
+      } catch (_) { }
+    }
+
     res.json({
       ...meta,
       status,
@@ -190,6 +215,7 @@ app.get("/api/docs/:docId", async (req, res) => {
       totalStaked: staked,
       totalStakedAPT: formatAPT(staked),
       readCount: reads,
+      challengeDeadline,
     });
 
   } catch (err) {
@@ -198,7 +224,6 @@ app.get("/api/docs/:docId", async (req, res) => {
 });
 
 // [GET] /api/read/:docId
-// Free read — streams blob from Shelby inline (video, PDF, image...)
 app.get("/api/read/:docId", async (req, res) => {
   try {
     const docId = parseInt(req.params.docId);
@@ -206,12 +231,9 @@ app.get("/api/read/:docId", async (req, res) => {
 
     if (!meta) return res.status(404).json({ error: "Document not found" });
 
-    // Increment read count f Redis
     await incrementReadCount(docId);
 
-    if (meta.mimeType) {
-      res.setHeader("Content-Type", meta.mimeType);
-    }
+    if (meta.mimeType) res.setHeader("Content-Type", meta.mimeType);
     res.setHeader("Content-Disposition", `inline; filename="${meta.filename || "document"}"`);
     res.setHeader("Accept-Ranges", "bytes");
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -220,9 +242,7 @@ app.get("/api/read/:docId", async (req, res) => {
     await shelby.streamBlob(meta.shelbyAccount, meta.shelbyBlobName, res, meta.mimeType);
   } catch (err) {
     console.error(C.red("Read error:"), err.message);
-    if (!res.headersSent) {
-      res.status(500).json({ error: err.message });
-    }
+    if (!res.headersSent) res.status(500).json({ error: err.message });
   }
 });
 
@@ -231,6 +251,16 @@ app.get("/api/challenges/:challengeId/tally", async (req, res) => {
   try {
     const tally = await contract.getChallengeTally(parseInt(req.params.challengeId));
     res.json(tally);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// [GET] /api/challenges/:challengeId/deadline
+app.get("/api/challenges/:challengeId/deadline", async (req, res) => {
+  try {
+    const deadline = await contract.getChallengeDeadline(parseInt(req.params.challengeId));
+    res.json({ deadline });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -1,14 +1,49 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
-import { fetchDoc, downloadUrl, formatBytes, STATUS, EXPLORER_NETWORK, APTOS_NODE_URL, PROMETHEUS_CONTRACT, type Doc } from "../lib/api";
-import { Shield, Eye, AlertTriangle, ExternalLink, ChevronLeft, Check, X, Loader } from "lucide-react";
+import { fetchDoc, downloadUrl, formatBytes, STATUS, EXPLORER_NETWORK, APTOS_NODE_URL, PROMETHEUS_CONTRACT, BASE, type Doc } from "../lib/api";
+import { Shield, Eye, AlertTriangle, ExternalLink, ChevronLeft, Check, X, Loader, Clock } from "lucide-react";
 
 const GUARDIAN_PRESETS = [5_000_000, 20_000_000, 50_000_000, 100_000_000];
 const CHALLENGE_STAKE = 20_000_000;
 const VOTE_STAKE = 1_000_000;
+
+// Format seconds → "47h 23m 12s"
+function formatCountdown(seconds: number): string {
+  if (seconds <= 0) return "EXPIRED";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function Countdown({ deadlineSeconds }: { deadlineSeconds: number }) {
+  const [remaining, setRemaining] = useState(() => {
+    const now = Math.floor(Date.now() / 1000);
+    return Math.max(0, deadlineSeconds - now);
+  });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Math.floor(Date.now() / 1000);
+      setRemaining(Math.max(0, deadlineSeconds - now));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [deadlineSeconds]);
+
+  const expired = remaining <= 0;
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "'IBM Plex Mono',monospace", fontSize: 13, color: expired ? "#f87171" : "#fbbf24" }}>
+      <Clock size={13} />
+      {expired ? "VOTING CLOSED" : formatCountdown(remaining)}
+    </div>
+  );
+}
 
 export default function DocumentPage() {
   const { id } = useParams<{ id: string }>();
@@ -42,11 +77,11 @@ export default function DocumentPage() {
   const [vTx, setVTx] = useState("");
   const [vErr, setVErr] = useState("");
 
-  const loadDoc = () => {
+  const loadDoc = useCallback(() => {
     fetchDoc(docId).then(d => { setDoc(d); setLoading(false); }).catch(() => setLoading(false));
-  };
+  }, [docId]);
 
-  useEffect(() => { loadDoc(); }, [docId]);
+  useEffect(() => { loadDoc(); }, [loadDoc]);
 
   // ── Become Guardian ───────────────────────────────────────
   const becomeGuardian = async () => {
@@ -84,6 +119,31 @@ export default function DocumentPage() {
         },
       });
       await aptos.waitForTransaction({ transactionHash: tx.hash });
+
+      // Fetch challengeId + deadline from chain and save to backend
+      const totalRes = await aptos.view({
+        payload: {
+          function: `${PROMETHEUS_CONTRACT}::challenge::get_total_challenges`,
+          functionArguments: [PROMETHEUS_CONTRACT],
+        },
+      });
+      const challengeId = Number(totalRes[0]);
+
+      const deadlineRes = await aptos.view({
+        payload: {
+          function: `${PROMETHEUS_CONTRACT}::challenge::get_challenge_deadline`,
+          functionArguments: [PROMETHEUS_CONTRACT, challengeId.toString()],
+        },
+      });
+      const challengeDeadline = Number(deadlineRes[0]);
+
+      // Patch backend registry with challengeId + deadline
+      await fetch(`${BASE}/api/registry/${docId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeId, challengeDeadline }),
+      });
+
       setCTx(tx.hash);
       setCStatus("done");
       loadDoc();
@@ -97,13 +157,14 @@ export default function DocumentPage() {
   const vote = async () => {
     if (!connected || !account) { setVErr("Connect wallet first."); setVStatus("error"); return; }
     if (vSupports === null) { setVErr("Select REAL or FAKE first."); setVStatus("error"); return; }
+    if (!doc?.challengeId) { setVErr("No active challenge found."); setVStatus("error"); return; }
     setVStatus("loading"); setVErr("");
     try {
       const tx = await signAndSubmitTransaction({
         data: {
           function: `${PROMETHEUS_CONTRACT}::challenge::vote`,
           typeArguments: [],
-          functionArguments: [PROMETHEUS_CONTRACT, "1", VOTE_STAKE.toString(), vSupports],
+          functionArguments: [PROMETHEUS_CONTRACT, doc.challengeId.toString(), VOTE_STAKE.toString(), vSupports],
         },
       });
       await aptos.waitForTransaction({ transactionHash: tx.hash });
@@ -133,7 +194,6 @@ export default function DocumentPage() {
     </div>
   );
 
-  // ── Render ────────────────────────────────────────────────
   if (loading) return (
     <div style={{ minHeight: "100vh", paddingTop: "56px", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <span style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, color: "hsl(var(--muted-foreground))" }}>loading...</span>
@@ -153,7 +213,6 @@ export default function DocumentPage() {
     <div style={{ minHeight: "100vh", paddingTop: "56px" }}>
       <div style={{ maxWidth: 800, margin: "0 auto", padding: "32px 24px" }}>
 
-        {/* Back */}
         <Link to="/feed" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, color: "hsl(var(--muted-foreground))", marginBottom: 28 }}>
           <ChevronLeft size={14} /> FEED
         </Link>
@@ -211,7 +270,6 @@ export default function DocumentPage() {
 
           <div className="amber-line" style={{ marginBottom: 32 }} />
 
-          {/* Wallet warning */}
           {!connected && (
             <div style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 3, padding: "12px 16px", marginBottom: 24, fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, color: "#fbbf24" }}>
               ⚠ Connect your Petra wallet to interact with this document.
@@ -236,7 +294,6 @@ export default function DocumentPage() {
               <p style={{ fontSize: "0.88rem", color: "hsl(var(--muted-foreground))", marginBottom: 24, lineHeight: 1.7 }}>
                 Stake APT on this document to become a guardian. You vouch for its authenticity and earn a share of read fees. If someone challenges and wins, your stake is slashed.
               </p>
-
               {gStatus === "done" ? <TxSuccess hash={gTx} /> : (
                 <>
                   <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
@@ -247,16 +304,12 @@ export default function DocumentPage() {
                       </button>
                     ))}
                   </div>
-
                   <button className="btn-amber"
                     disabled={!connected || gStatus === "loading"}
                     onClick={becomeGuardian}
                     style={{ width: "100%", padding: "14px", fontSize: "0.9rem", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                    {gStatus === "loading"
-                      ? <><Loader size={14} /> STAKING...</>
-                      : <><Shield size={14} /> STAKE {(gStake / 1e8).toFixed(2)} APT AS GUARDIAN</>}
+                    {gStatus === "loading" ? <><Loader size={14} /> STAKING...</> : <><Shield size={14} /> STAKE {(gStake / 1e8).toFixed(2)} APT AS GUARDIAN</>}
                   </button>
-
                   {gErr && <ErrBox msg={gErr} />}
                 </>
               )}
@@ -271,26 +324,20 @@ export default function DocumentPage() {
                   <p style={{ fontSize: "0.88rem", color: "hsl(var(--muted-foreground))", marginBottom: 24, lineHeight: 1.7 }}>
                     Believe this document is fabricated? Stake 0.2 APT to open a challenge. Community votes for 72h. Losers get slashed.
                   </p>
-
                   {cStatus === "done" ? <TxSuccess hash={cTx} /> : (
                     <>
                       <div style={{ marginBottom: 16 }}>
                         <label style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, color: "hsl(var(--muted-foreground))", letterSpacing: "0.1em", display: "block", marginBottom: 8 }}>REASON *</label>
                         <textarea value={cReason} onChange={e => setCReason(e.target.value)}
-                          placeholder="Why is this document fake or misleading?"
-                          rows={3}
+                          placeholder="Why is this document fake or misleading?" rows={3}
                           style={{ width: "100%", padding: "10px 14px", background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 3, color: "hsl(var(--foreground))", fontFamily: "'IBM Plex Sans',sans-serif", fontSize: "0.9rem", resize: "vertical" }} />
                       </div>
-
                       <button
                         disabled={!connected || !cReason.trim() || cStatus === "loading"}
                         onClick={openChallenge}
                         style={{ width: "100%", padding: "14px", fontSize: "0.9rem", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", borderRadius: 3, background: "rgba(248,113,113,0.12)", border: "1px solid rgba(248,113,113,0.4)", color: "#f87171", fontFamily: "'Oswald',sans-serif", letterSpacing: "0.08em" }}>
-                        {cStatus === "loading"
-                          ? <><Loader size={14} /> SUBMITTING...</>
-                          : <><AlertTriangle size={14} /> OPEN CHALLENGE — 0.2 APT</>}
+                        {cStatus === "loading" ? <><Loader size={14} /> SUBMITTING...</> : <><AlertTriangle size={14} /> OPEN CHALLENGE — 0.2 APT</>}
                       </button>
-
                       {cErr && <ErrBox msg={cErr} />}
                     </>
                   )}
@@ -298,7 +345,10 @@ export default function DocumentPage() {
               ) : doc.status === 1 ? (
                 <>
                   <div style={{ background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.2)", borderRadius: 3, padding: "14px 16px", marginBottom: 24 }}>
-                    <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: "0.9rem", color: "#fbbf24", letterSpacing: "0.08em", marginBottom: 4 }}>⚡ UNDER CHALLENGE</div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                      <div style={{ fontFamily: "'Oswald',sans-serif", fontSize: "0.9rem", color: "#fbbf24", letterSpacing: "0.08em" }}>⚡ UNDER CHALLENGE</div>
+                      {doc.challengeDeadline && <Countdown deadlineSeconds={doc.challengeDeadline} />}
+                    </div>
                     <p style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 11, color: "hsl(var(--muted-foreground))", margin: 0 }}>
                       This document is being challenged. Vote before the deadline.
                     </p>
@@ -309,7 +359,6 @@ export default function DocumentPage() {
                       <p style={{ fontSize: "0.88rem", color: "hsl(var(--muted-foreground))", marginBottom: 20 }}>
                         Stake APT to vote. <span style={{ color: "#4ade80" }}>✓ Real</span> = document is authentic. <span style={{ color: "#f87171" }}>✗ Fake</span> = challenger is right.
                       </p>
-
                       <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
                         <button onClick={() => setVSupports(true)}
                           style={{ flex: 1, padding: 16, cursor: "pointer", borderRadius: 3, background: vSupports === true ? "rgba(74,222,128,0.12)" : "hsl(var(--card))", border: vSupports === true ? "1px solid rgba(74,222,128,0.4)" : "1px solid hsl(var(--border))", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "'Oswald',sans-serif", letterSpacing: "0.08em", color: vSupports === true ? "#4ade80" : "hsl(var(--foreground))", transition: "all 0.15s" }}>
@@ -320,16 +369,12 @@ export default function DocumentPage() {
                           <X size={16} /> FAKE
                         </button>
                       </div>
-
                       <button className="btn-amber"
                         disabled={!connected || vSupports === null || vStatus === "loading"}
                         onClick={vote}
                         style={{ width: "100%", padding: "14px", fontSize: "0.9rem", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                        {vStatus === "loading"
-                          ? <><Loader size={14} /> VOTING...</>
-                          : <>SUBMIT VOTE — 0.01 APT</>}
+                        {vStatus === "loading" ? <><Loader size={14} /> VOTING...</> : <>SUBMIT VOTE — 0.01 APT</>}
                       </button>
-
                       {vErr && <ErrBox msg={vErr} />}
                     </>
                   )}

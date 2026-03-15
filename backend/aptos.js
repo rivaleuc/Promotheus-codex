@@ -121,6 +121,12 @@ async function getTotalChallenges() {
   return Number(total);
 }
 
+// Get challenge deadline
+async function getChallengeDeadline(challengeId) {
+  const [deadline] = await viewFn(`${CONTRACT}::challenge::get_challenge_deadline`, [CONTRACT, challengeId.toString()]);
+  return Number(deadline);
+}
+
 // Status constants
 const DOC_STATUS = { ACTIVE: 0, CHALLENGED: 1, REMOVED: 2, VINDICATED: 3 };
 const STATUS_LABELS = { 0: "active", 1: "challenged", 2: "removed", 3: "vindicated" };
@@ -136,6 +142,7 @@ module.exports = {
   getReadCount,
   getChallengeTally,
   getTotalChallenges,
+  getChallengeDeadline,
   DOC_STATUS,
   STATUS_LABELS,
   getServerAccount,

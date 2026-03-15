@@ -1,16 +1,18 @@
 // ============================================================
 //   PROMETHEUS — Backend API
 //   Shelby Protocol + Aptos Move contract
+//   Registry: Upstash Redis (persistent across restarts)
 // ============================================================
 require("dotenv").config();
 
 const express = require("express");
-const multer  = require("multer");
-const cors    = require("cors");
-const shelby  = require("./shelby");
+const multer = require("multer");
+const cors = require("cors");
+const shelby = require("./shelby");
 const contract = require("./aptos");
+const { Redis } = require("@upstash/redis");
 
-const app  = express();
+const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
@@ -21,18 +23,48 @@ const upload = multer({
   limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
 });
 
-// ─── In-memory doc registry ───────────────────────────────
-// Maps docId → full metadata (augments on-chain data)
-// In production: replace with Postgres
-const docRegistry = new Map();
+// ─── Upstash Redis client ──────────────────────────────────
+// Required env vars:
+//   UPSTASH_REDIS_REST_URL
+//   UPSTASH_REDIS_REST_TOKEN
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
+
+// ─── Registry helpers ──────────────────────────────────────
+const REGISTRY_KEY = "prometheus:registry"; // Redis hash key
+
+async function registryGet(docId) {
+  const raw = await redis.hget(REGISTRY_KEY, String(docId));
+  if (!raw) return null;
+  return typeof raw === "string" ? JSON.parse(raw) : raw;
+}
+
+async function registrySet(docId, meta) {
+  await redis.hset(REGISTRY_KEY, { [String(docId)]: JSON.stringify(meta) });
+}
+
+async function registryEntries() {
+  const all = await redis.hgetall(REGISTRY_KEY);
+  if (!all) return [];
+  return Object.entries(all).map(([k, v]) => [
+    Number(k),
+    typeof v === "string" ? JSON.parse(v) : v,
+  ]);
+}
+
+async function registrySize() {
+  return await redis.hlen(REGISTRY_KEY);
+}
 
 // ─── Helpers ──────────────────────────────────────────────
 const C = {
   green: (s) => `\x1b[32m${s}\x1b[0m`,
-  red:   (s) => `\x1b[31m${s}\x1b[0m`,
-  cyan:  (s) => `\x1b[36m${s}\x1b[0m`,
-  dim:   (s) => `\x1b[2m${s}\x1b[0m`,
-  bold:  (s) => `\x1b[1m${s}\x1b[0m`,
+  red: (s) => `\x1b[31m${s}\x1b[0m`,
+  cyan: (s) => `\x1b[36m${s}\x1b[0m`,
+  dim: (s) => `\x1b[2m${s}\x1b[0m`,
+  bold: (s) => `\x1b[1m${s}\x1b[0m`,
 };
 
 function formatAPT(octas) {
@@ -45,12 +77,13 @@ function formatAPT(octas) {
 app.get("/health", async (req, res) => {
   try {
     const networkName = process.env.NETWORK_NAME || "shelbynet";
+    const size = await registrySize();
     res.json({
       ok: true,
       contract: process.env.PROMETHEUS_CONTRACT,
       serverWallet: null,
       network: networkName,
-      docs: docRegistry.size,
+      docs: size,
     });
   } catch (e) {
     res.json({ ok: false, error: e.message });
@@ -65,7 +98,8 @@ app.post("/api/shelby/upload", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file provided" });
     const { account, blobName } = req.body;
-    if (!account || !blobName) return res.status(400).json({ error: "account and blobName are required" });
+    if (!account || !blobName)
+      return res.status(400).json({ error: "account and blobName are required" });
     await shelby.putBlob(account, blobName, req.file.buffer);
     res.json({ ok: true });
   } catch (err) {
@@ -84,7 +118,7 @@ app.post("/api/registry", async (req, res) => {
     if (!meta || typeof meta.docId !== "number") {
       return res.status(400).json({ error: "Invalid payload" });
     }
-    docRegistry.set(meta.docId, meta);
+    await registrySet(meta.docId, meta);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -93,9 +127,7 @@ app.post("/api/registry", async (req, res) => {
 
 // ─────────────────────────────────────────────────────────
 // [POST] /api/upload
-//
 // Server-signed upload is disabled (no backend wallet).
-// Use the client wallet flow (/api/shelby/upload + on-chain tx from frontend).
 // ─────────────────────────────────────────────────────────
 app.post("/api/upload", async (_req, res) => {
   res.status(501).json({
@@ -109,9 +141,10 @@ app.post("/api/upload", async (_req, res) => {
 // ─────────────────────────────────────────────────────────
 app.get("/api/docs", async (req, res) => {
   try {
+    const entries = await registryEntries();
     const docs = [];
 
-    for (const [docId, meta] of docRegistry.entries()) {
+    for (const [docId, meta] of entries) {
       const [status, guardians, staked, reads] = await Promise.all([
         contract.getDocStatus(docId),
         contract.getGuardianCount(docId),
@@ -124,13 +157,12 @@ app.get("/api/docs", async (req, res) => {
         status,
         statusLabel: contract.STATUS_LABELS[status],
         guardianCount: guardians,
-        totalStaked:   staked,
+        totalStaked: staked,
         totalStakedAPT: formatAPT(staked),
-        readCount:     reads,
+        readCount: reads,
       });
     }
 
-    // Sort by docId desc (newest first)
     docs.sort((a, b) => b.docId - a.docId);
     res.json({ docs, total: docs.length });
 
@@ -145,7 +177,7 @@ app.get("/api/docs", async (req, res) => {
 app.get("/api/docs/:docId", async (req, res) => {
   try {
     const docId = parseInt(req.params.docId);
-    const meta  = docRegistry.get(docId);
+    const meta = await registryGet(docId);
 
     if (!meta) return res.status(404).json({ error: "Document not found" });
 
@@ -161,9 +193,9 @@ app.get("/api/docs/:docId", async (req, res) => {
       status,
       statusLabel: contract.STATUS_LABELS[status],
       guardianCount: guardians,
-      totalStaked:   staked,
+      totalStaked: staked,
       totalStakedAPT: formatAPT(staked),
-      readCount:     reads,
+      readCount: reads,
     });
 
   } catch (err) {
@@ -173,13 +205,11 @@ app.get("/api/docs/:docId", async (req, res) => {
 
 // ─────────────────────────────────────────────────────────
 // [GET] /api/read/:docId
-//
 // Server-sponsored reads are disabled (no backend wallet).
-// Paid reads must be done client-side with the user's wallet.
 // ─────────────────────────────────────────────────────────
 app.get("/api/read/:docId", async (req, res) => {
   const docId = parseInt(req.params.docId);
-  const meta = docRegistry.get(docId);
+  const meta = await registryGet(docId);
 
   if (!meta) return res.status(404).json({ error: "Document not found" });
 
@@ -209,22 +239,25 @@ app.get("/api/challenges/:challengeId/tally", async (req, res) => {
 // ─────────────────────────────────────────────────────────
 app.get("/api/stats", async (req, res) => {
   try {
-    const [totalDocs, totalChallenges] = await Promise.all([
+    const [totalDocs, totalChallenges, entries] = await Promise.all([
       contract.getTotalDocs(),
       contract.getTotalChallenges(),
+      registryEntries(),
     ]);
 
-    // Aggregate from registry
     let totalReads = 0;
     let totalStaked = 0;
-    for (const [docId] of docRegistry.entries()) {
-      const [reads, staked] = await Promise.all([
-        contract.getReadCount(docId),
-        contract.getTotalStaked(docId),
-      ]);
-      totalReads  += reads;
-      totalStaked += staked;
-    }
+
+    await Promise.all(
+      entries.map(async ([docId]) => {
+        const [reads, staked] = await Promise.all([
+          contract.getReadCount(docId),
+          contract.getTotalStaked(docId),
+        ]);
+        totalReads += reads;
+        totalStaked += staked;
+      })
+    );
 
     res.json({
       totalDocs,
@@ -233,7 +266,7 @@ app.get("/api/stats", async (req, res) => {
       totalStaked,
       totalStakedAPT: formatAPT(totalStaked),
       contract: process.env.PROMETHEUS_CONTRACT,
-      network:  process.env.NETWORK_NAME || "shelbynet",
+      network: process.env.NETWORK_NAME || "shelbynet",
     });
 
   } catch (err) {

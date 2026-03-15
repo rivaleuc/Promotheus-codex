@@ -203,7 +203,7 @@ app.get("/api/read/:docId", async (req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Cache-Control", "no-cache");
 
-    await shelby.streamBlob(meta.shelbyAccount, meta.shelbyBlobName, res);
+    await shelby.streamBlob(meta.shelbyAccount, meta.shelbyBlobName, res, meta.mimeType);
   } catch (err) {
     console.error(C.red("Read error:"), err.message);
     if (!res.headersSent) {

@@ -149,7 +149,7 @@ async function putBlob(account, blobName, buffer) {
 }
 
 // GET blob from Shelby → pipe to Express response
-function streamBlob(account, blobName, expressRes) {
+function streamBlob(account, blobName, expressRes, mimeType) {
   return new Promise((resolve, reject) => {
     const path = `${BASE_PATH}/v1/blobs/${account}/${encodeURIComponent(blobName)}`;
     const options = {
@@ -162,7 +162,7 @@ function streamBlob(account, blobName, expressRes) {
     const req = https.request(options, (shelbyRes) => {
       if (shelbyRes.statusCode === 200) {
         expressRes.setHeader("Content-Type",
-          shelbyRes.headers["content-type"] || "application/octet-stream");
+          mimeType || shelbyRes.headers["content-type"] || "application/octet-stream");
         if (shelbyRes.headers["content-length"]) {
           expressRes.setHeader("Content-Length", shelbyRes.headers["content-length"]);
         }

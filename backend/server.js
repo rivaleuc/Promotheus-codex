@@ -233,7 +233,7 @@ app.get("/api/read/:docId", async (req, res) => {
 
     if (meta.mimeType) res.setHeader("Content-Type", meta.mimeType);
     if (meta.size) res.setHeader("Content-Length", meta.size);
-    res.setHeader("Content-Disposition", `inline; filename="${meta.filename || "document"}"`);
+    res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(meta.filename || "document")}`);
     res.setHeader("Accept-Ranges", "bytes");
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Cache-Control", "no-cache");

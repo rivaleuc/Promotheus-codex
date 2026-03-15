@@ -6,14 +6,14 @@
 // ============================================================
 require("dotenv").config();
 
-const express  = require("express");
-const multer   = require("multer");
-const cors     = require("cors");
-const shelby   = require("./shelby");
+const express = require("express");
+const multer = require("multer");
+const cors = require("cors");
+const shelby = require("./shelby");
 const contract = require("./aptos");
 const { Redis } = require("@upstash/redis");
 
-const app  = express();
+const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
@@ -25,11 +25,8 @@ const upload = multer({
 });
 
 // ─── Upstash Redis client ──────────────────────────────────
-// Required env vars:
-//   UPSTASH_REDIS_REST_URL
-//   UPSTASH_REDIS_REST_TOKEN
 const redis = new Redis({
-  url:   process.env.UPSTASH_REDIS_REST_URL,
+  url: process.env.UPSTASH_REDIS_REST_URL,
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
@@ -62,10 +59,10 @@ async function registrySize() {
 // ─── Helpers ──────────────────────────────────────────────
 const C = {
   green: (s) => `\x1b[32m${s}\x1b[0m`,
-  red:   (s) => `\x1b[31m${s}\x1b[0m`,
-  cyan:  (s) => `\x1b[36m${s}\x1b[0m`,
-  dim:   (s) => `\x1b[2m${s}\x1b[0m`,
-  bold:  (s) => `\x1b[1m${s}\x1b[0m`,
+  red: (s) => `\x1b[31m${s}\x1b[0m`,
+  cyan: (s) => `\x1b[36m${s}\x1b[0m`,
+  dim: (s) => `\x1b[2m${s}\x1b[0m`,
+  bold: (s) => `\x1b[1m${s}\x1b[0m`,
 };
 
 function formatAPT(octas) {
@@ -77,13 +74,12 @@ function formatAPT(octas) {
 // [GET] /health
 app.get("/health", async (req, res) => {
   try {
-    const networkName = process.env.NETWORK_NAME || "shelbynet";
     const size = await registrySize();
     res.json({
       ok: true,
       contract: process.env.PROMETHEUS_CONTRACT,
       serverWallet: null,
-      network: networkName,
+      network: process.env.NETWORK_NAME || "shelbynet",
       docs: size,
     });
   } catch (e) {
@@ -91,10 +87,7 @@ app.get("/health", async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────
 // [POST] /api/shelby/upload
-// Storage-only upload (expects blob registered on-chain by client wallet)
-// ─────────────────────────────────────────────────────────
 app.post("/api/shelby/upload", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file provided" });
@@ -109,10 +102,7 @@ app.post("/api/shelby/upload", upload.single("file"), async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────
 // [POST] /api/registry
-// Store doc metadata (client-signed flow)
-// ─────────────────────────────────────────────────────────
 app.post("/api/registry", async (req, res) => {
   try {
     const meta = req.body;
@@ -126,20 +116,14 @@ app.post("/api/registry", async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────
-// [POST] /api/upload
-// Server-signed upload is disabled (no backend wallet).
-// ─────────────────────────────────────────────────────────
+// [POST] /api/upload — disabled
 app.post("/api/upload", async (_req, res) => {
   res.status(501).json({
     error: "Server-signed upload is disabled. Use client wallet upload flow.",
   });
 });
 
-// ─────────────────────────────────────────────────────────
 // [GET] /api/docs
-// List all documents with on-chain state
-// ─────────────────────────────────────────────────────────
 app.get("/api/docs", async (req, res) => {
   try {
     const entries = await registryEntries();
@@ -156,11 +140,11 @@ app.get("/api/docs", async (req, res) => {
       docs.push({
         ...meta,
         status,
-        statusLabel:    contract.STATUS_LABELS[status],
-        guardianCount:  guardians,
-        totalStaked:    staked,
+        statusLabel: contract.STATUS_LABELS[status],
+        guardianCount: guardians,
+        totalStaked: staked,
         totalStakedAPT: formatAPT(staked),
-        readCount:      reads,
+        readCount: reads,
       });
     }
 
@@ -172,13 +156,11 @@ app.get("/api/docs", async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────
 // [GET] /api/docs/:docId
-// ─────────────────────────────────────────────────────────
 app.get("/api/docs/:docId", async (req, res) => {
   try {
     const docId = parseInt(req.params.docId);
-    const meta  = await registryGet(docId);
+    const meta = await registryGet(docId);
 
     if (!meta) return res.status(404).json({ error: "Document not found" });
 
@@ -192,11 +174,11 @@ app.get("/api/docs/:docId", async (req, res) => {
     res.json({
       ...meta,
       status,
-      statusLabel:    contract.STATUS_LABELS[status],
-      guardianCount:  guardians,
-      totalStaked:    staked,
+      statusLabel: contract.STATUS_LABELS[status],
+      guardianCount: guardians,
+      totalStaked: staked,
       totalStakedAPT: formatAPT(staked),
-      readCount:      reads,
+      readCount: reads,
     });
 
   } catch (err) {
@@ -204,27 +186,22 @@ app.get("/api/docs/:docId", async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────
 // [GET] /api/read/:docId
-// Free read — server streams blob from Shelby directly
-// Browser opens file inline (PDF, video, image...)
-// ─────────────────────────────────────────────────────────
+// Free read — streams blob from Shelby inline (video, PDF, image...)
 app.get("/api/read/:docId", async (req, res) => {
   try {
     const docId = parseInt(req.params.docId);
-    const meta  = await registryGet(docId);
+    const meta = await registryGet(docId);
 
     if (!meta) return res.status(404).json({ error: "Document not found" });
 
-    // Set correct MIME type so browser can render inline
     if (meta.mimeType) {
       res.setHeader("Content-Type", meta.mimeType);
     }
-
-    res.setHeader(
-      "Content-Disposition",
-      `inline; filename="${meta.filename || "document"}"`
-    );
+    res.setHeader("Content-Disposition", `inline; filename="${meta.filename || "document"}"`);
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "no-cache");
 
     await shelby.streamBlob(meta.shelbyAccount, meta.shelbyBlobName, res);
   } catch (err) {
@@ -235,9 +212,7 @@ app.get("/api/read/:docId", async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────
 // [GET] /api/challenges/:challengeId/tally
-// ─────────────────────────────────────────────────────────
 app.get("/api/challenges/:challengeId/tally", async (req, res) => {
   try {
     const tally = await contract.getChallengeTally(parseInt(req.params.challengeId));
@@ -247,10 +222,7 @@ app.get("/api/challenges/:challengeId/tally", async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────
 // [GET] /api/stats
-// Protocol-level stats
-// ─────────────────────────────────────────────────────────
 app.get("/api/stats", async (req, res) => {
   try {
     const [totalDocs, totalChallenges, entries] = await Promise.all([
@@ -259,7 +231,7 @@ app.get("/api/stats", async (req, res) => {
       registryEntries(),
     ]);
 
-    let totalReads  = 0;
+    let totalReads = 0;
     let totalStaked = 0;
 
     await Promise.all(
@@ -268,7 +240,7 @@ app.get("/api/stats", async (req, res) => {
           contract.getReadCount(docId),
           contract.getTotalStaked(docId),
         ]);
-        totalReads  += reads;
+        totalReads += reads;
         totalStaked += staked;
       })
     );
@@ -280,7 +252,7 @@ app.get("/api/stats", async (req, res) => {
       totalStaked,
       totalStakedAPT: formatAPT(totalStaked),
       contract: process.env.PROMETHEUS_CONTRACT,
-      network:  process.env.NETWORK_NAME || "shelbynet",
+      network: process.env.NETWORK_NAME || "shelbynet",
     });
 
   } catch (err) {

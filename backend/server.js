@@ -5,14 +5,14 @@
 // ============================================================
 require("dotenv").config();
 
-const express = require("express");
-const multer = require("multer");
-const cors = require("cors");
-const shelby = require("./shelby");
+const express  = require("express");
+const multer   = require("multer");
+const cors     = require("cors");
+const shelby   = require("./shelby");
 const contract = require("./aptos");
 const { Redis } = require("@upstash/redis");
 
-const app = express();
+const app  = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
@@ -28,7 +28,7 @@ const upload = multer({
 //   UPSTASH_REDIS_REST_URL
 //   UPSTASH_REDIS_REST_TOKEN
 const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL,
+  url:   process.env.UPSTASH_REDIS_REST_URL,
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
@@ -61,10 +61,10 @@ async function registrySize() {
 // ─── Helpers ──────────────────────────────────────────────
 const C = {
   green: (s) => `\x1b[32m${s}\x1b[0m`,
-  red: (s) => `\x1b[31m${s}\x1b[0m`,
-  cyan: (s) => `\x1b[36m${s}\x1b[0m`,
-  dim: (s) => `\x1b[2m${s}\x1b[0m`,
-  bold: (s) => `\x1b[1m${s}\x1b[0m`,
+  red:   (s) => `\x1b[31m${s}\x1b[0m`,
+  cyan:  (s) => `\x1b[36m${s}\x1b[0m`,
+  dim:   (s) => `\x1b[2m${s}\x1b[0m`,
+  bold:  (s) => `\x1b[1m${s}\x1b[0m`,
 };
 
 function formatAPT(octas) {
@@ -155,11 +155,11 @@ app.get("/api/docs", async (req, res) => {
       docs.push({
         ...meta,
         status,
-        statusLabel: contract.STATUS_LABELS[status],
-        guardianCount: guardians,
-        totalStaked: staked,
+        statusLabel:    contract.STATUS_LABELS[status],
+        guardianCount:  guardians,
+        totalStaked:    staked,
         totalStakedAPT: formatAPT(staked),
-        readCount: reads,
+        readCount:      reads,
       });
     }
 
@@ -177,7 +177,7 @@ app.get("/api/docs", async (req, res) => {
 app.get("/api/docs/:docId", async (req, res) => {
   try {
     const docId = parseInt(req.params.docId);
-    const meta = await registryGet(docId);
+    const meta  = await registryGet(docId);
 
     if (!meta) return res.status(404).json({ error: "Document not found" });
 
@@ -191,11 +191,11 @@ app.get("/api/docs/:docId", async (req, res) => {
     res.json({
       ...meta,
       status,
-      statusLabel: contract.STATUS_LABELS[status],
-      guardianCount: guardians,
-      totalStaked: staked,
+      statusLabel:    contract.STATUS_LABELS[status],
+      guardianCount:  guardians,
+      totalStaked:    staked,
       totalStakedAPT: formatAPT(staked),
-      readCount: reads,
+      readCount:      reads,
     });
 
   } catch (err) {
@@ -209,14 +209,14 @@ app.get("/api/docs/:docId", async (req, res) => {
 // ─────────────────────────────────────────────────────────
 app.get("/api/read/:docId", async (req, res) => {
   const docId = parseInt(req.params.docId);
-  const meta = await registryGet(docId);
+  const meta  = await registryGet(docId);
 
   if (!meta) return res.status(404).json({ error: "Document not found" });
 
   res.status(402).json({
     error: "Paid reads require client wallet signature. Server wallet is disabled.",
     docId,
-    shelbyAccount: meta.shelbyAccount,
+    shelbyAccount:  meta.shelbyAccount,
     shelbyBlobName: meta.shelbyBlobName,
   });
 });
@@ -245,7 +245,7 @@ app.get("/api/stats", async (req, res) => {
       registryEntries(),
     ]);
 
-    let totalReads = 0;
+    let totalReads  = 0;
     let totalStaked = 0;
 
     await Promise.all(
@@ -254,7 +254,7 @@ app.get("/api/stats", async (req, res) => {
           contract.getReadCount(docId),
           contract.getTotalStaked(docId),
         ]);
-        totalReads += reads;
+        totalReads  += reads;
         totalStaked += staked;
       })
     );
@@ -266,7 +266,7 @@ app.get("/api/stats", async (req, res) => {
       totalStaked,
       totalStakedAPT: formatAPT(totalStaked),
       contract: process.env.PROMETHEUS_CONTRACT,
-      network: process.env.NETWORK_NAME || "shelbynet",
+      network:  process.env.NETWORK_NAME || "shelbynet",
     });
 
   } catch (err) {

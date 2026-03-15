@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
+export const BASE = import.meta.env.VITE_API_URL || "http://localhost:3001";
 const DEMO = import.meta.env.VITE_DEMO === "1";
 export const NETWORK_NAME = (import.meta.env.VITE_NETWORK_NAME || "testnet").toLowerCase();
 export const EXPLORER_NETWORK = (import.meta.env.VITE_EXPLORER_NETWORK || NETWORK_NAME).toLowerCase();
@@ -268,8 +268,8 @@ export function shortHash(h: string): string {
 }
 
 export const STATUS: Record<number, { label: string; cls: string }> = {
-  0: { label: "ACTIVE",      cls: "badge-active"     },
-  1: { label: "CHALLENGED",  cls: "badge-challenged"  },
-  2: { label: "REMOVED",     cls: "badge-removed"     },
-  3: { label: "VINDICATED",  cls: "badge-vindicated"  },
+  0: { label: "ACTIVE", cls: "badge-active" },
+  1: { label: "CHALLENGED", cls: "badge-challenged" },
+  2: { label: "REMOVED", cls: "badge-removed" },
+  3: { label: "VINDICATED", cls: "badge-vindicated" },
 };

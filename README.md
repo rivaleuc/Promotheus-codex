@@ -4,7 +4,8 @@
 
 > A decentralized document authenticity protocol. No delete button. No moderator. Skin-in-the-game replaces trust.
 
-![Architecture](assets/architecture.png)---
+![Architecture](assets/architecture.png)
+---
 
 ## The Problem
 
